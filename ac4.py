@@ -1,8 +1,9 @@
 import itertools
 from typing import Any, Callable, DefaultDict
 
+# Type hints for the Arcs, Constraint Functions and Constraint Store
 Arc = (int, int)
-ConstraintFunction = Callable[[Any, Any], bool]
+ConstraintFunction = Callable[[(int, int), (int, int)], bool]
 ConstraintStore = Dict[Arc, ConstraintFunction]
 
 
@@ -15,4 +16,6 @@ class AC4:
 
 
 def nqueens_constraint(q1, q2):
-    return (q2 != q1) and (q2 != q1 + j - i) and (q2 != q1 - j - i)
+    i, xi = q1
+    j, xj = q2
+    return (xj != xi) and (xj != xi + j - i) and (xj != xi - j - i)
