@@ -1,0 +1,7 @@
+language ESSENCE' 1.0
+
+letting nShops = 2
+letting demand = [20, 25]
+letting storageLimit = 50
+
+letting nSuppliers = 3
