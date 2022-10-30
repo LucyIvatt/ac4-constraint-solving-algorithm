@@ -21,40 +21,45 @@ class Arc:
     def __repr__(self):
         return f"Arc(x{self.i}, x{self.j})"
 
+    def __eq__(self, other):
+        if not isinstance(other, Arc):
+            return NotImplemented
+        return self.i == other.i and self.j == other.j
+
+    def __hash__(self):
+        return hash((self.i, self.j))
+
 
 # Type hints for the Arcs, Constraint Functions and Constraint Store
 ConstraintFunction = Callable[[DecisionVar, DecisionVar], bool]
 ConstraintStore = Dict[Arc, ConstraintFunction]
-Domains = Dict[int, Set]
+InputDomains = Dict[int, Set]
 
 
 class AC4:
-    def __init__(self, domains: DecisionVar, constraints: ConstraintStore):
-        self.domains = domains
+    def __init__(self, input_domains: InputDomains, constraints: ConstraintStore):
+        self.input_domains = input_domains
         self.constraints = constraints
 
         self.Counter = {(arc, val): 0 for arc in self.constraints.keys()
-                        for val in domains[arc.i]}
+                        for val in self.input_domains[arc.i]}
 
-        self.S = {(var, val): set() for var in self.domains.keys()
-                  for val in self.domains[var]}
-
-        self.M = {(var, val): 0 for var in self.domains.keys()
-                  for val in self.domains[var]}
-
+        self.S = {(var, val): set() for var in self.input_domains.keys()
+                  for val in self.input_domains[var]}
+        self.M = {(var, val): 0 for var in self.input_domains.keys()
+                  for val in self.input_domains[var]}
         self.L = list()
+
+        self.final_domains = {var: set() for var in self.input_domains.keys()}
 
         self.initialise()
         self.propagate()
 
-    def set_decision_var(self, var, value):
-        self.domains[var] = set(value)
-
     def initialise(self):
         logging.debug("Initialise: Beginning initialization")
         for arc, constraint in self.constraints.items():
-            for di in self.domains[arc.i]:
-                for dj in self.domains[arc.j]:
+            for di in self.input_domains[arc.i]:
+                for dj in self.input_domains[arc.j]:
                     if self.M[(arc.i, di)] != 1 or self.M[(arc.j, dj)] != 1:
                         if self.checkConstraint(arc.i, di, arc.j, dj, constraint) == True:
                             self.S[arc.j, dj].add((arc.i, di))
@@ -67,36 +72,37 @@ class AC4:
                     self.L.append((arc.i, di))
                     logging.debug(f"Initialise: deleting x{arc.i}, {di}")
 
-                for key in self.Counter:
-                    print(type(key))
-
         logging.debug(
             f"Initialise: List of deletions to propagate - {''.join([f'(x{d[0]}, {d[1]}) ' for d in self.L])}")
 
     def propagate(self):
-        for key in self.Counter:
-            print(key, " ", type(key))
-        print(type((Arc((1, 0)), 21)))
-        self.Counter[(Arc((1, 0)), 21)]
-        # # while L is not empty
-        # while len(self.L) > 0:
-        #     # Remove an element from L
-        #     xj, dj = self.L[0]
-        #     self.L.pop(0)
+        # while L is not empty
+        while len(self.L) > 0:
+            # Remove an element from L
+            xj, dj = self.L[0]
+            self.L.pop(0)
 
-        #     for xi, di in self.S[(xj, dj)]:
-        #         arc = Arc((xi, xj))
-        #         self.Counter[(arc, di)] -= 1
-        #         logging.debug(
-        #             f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, xi)]}")
-        #         if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
-        #             self.M[(xi, di)] = 1
-        #             self.L.append((xi, di))
-        #             logging.debug(
-        #                 f"Propagate: deleting value x{xi}, {di}")
+            for xi, di in self.S[(xj, dj)]:
+                arc = Arc((xi, xj))
+                self.Counter[(arc, di)] -= 1
+                logging.debug(
+                    f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, di)]}")
+                if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
+                    self.M[(xi, di)] = 1
+                    self.L.append((xi, di))
+                    logging.debug(
+                        f"Propagate: deleting value x{xi}, {di}")
 
-        # # Prints out final domains
-        # print(M)
+        # Checks final domains by accessing the switches stored in M
+        for key, switch in self.M.items():
+            xi, di = key
+            if switch == 0:
+                self.final_domains[xi].add(di)
+
+        # Prints final domains
+        logging.info(f"Final Domains")
+        for key, value in self.final_domains.items():
+            logging.info(f"x{key}: {value}")
 
     @ staticmethod
     def checkConstraint(i, xi, j, xj, constraint):
