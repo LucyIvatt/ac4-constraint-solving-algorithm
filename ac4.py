@@ -1,5 +1,8 @@
 import itertools
+import logging
 from typing import Any, Callable, Dict, Set, Tuple
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class DecisionVar:
@@ -13,10 +16,10 @@ class Arc:
         self.i, self.j = arc
 
     def __str__(self):
-        return f"({self.i}, {self.j})"
+        return f"(x{self.i}, x{self.j})"
 
     def __repr__(self):
-        return f"Arc({self.i}, {self.j})"
+        return f"Arc(x{self.i}, x{self.j})"
 
 
 # Type hints for the Arcs, Constraint Functions and Constraint Store
@@ -41,32 +44,61 @@ class AC4:
 
         self.L = list()
 
+        self.initialise()
+        self.propagate()
+
     def set_decision_var(self, var, value):
         self.domains[var] = set(value)
 
     def initialise(self):
+        logging.debug("Initialise: Beginning initialization")
         for arc, constraint in self.constraints.items():
-            # print("Checking ", arc)
             for di in self.domains[arc.i]:
                 for dj in self.domains[arc.j]:
                     if self.M[(arc.i, di)] != 1 or self.M[(arc.j, dj)] != 1:
-                        print("checking ", di, " ", constraint, " ", dj)
                         if self.checkConstraint(arc.i, di, arc.j, dj, constraint) == True:
-                            print("meets constraint")
                             self.S[arc.j, dj].add((arc.i, di))
                             self.Counter[(arc, di)] += 1
-                    else:
-                        pass
-                        # print("one was deleted")
-                if self.Counter[(arc, di)] == 0:
-                    print("deleting ", arc.i, " ", di)
+                            logging.debug(
+                                f"Initialise: set counter {arc}, {di} = {self.Counter[(arc, di)]}")
+
+                if self.Counter[(arc, di)] == 0 and self.M[(arc.i, di)] != 1:
                     self.M[(arc.i, di)] = 1
                     self.L.append((arc.i, di))
-            for key, value in self.Counter.items():
-                print(key, value)
-        print(self.M)
+                    logging.debug(f"Initialise: deleting x{arc.i}, {di}")
 
-    @staticmethod
+                for key in self.Counter:
+                    print(type(key))
+
+        logging.debug(
+            f"Initialise: List of deletions to propagate - {''.join([f'(x{d[0]}, {d[1]}) ' for d in self.L])}")
+
+    def propagate(self):
+        for key in self.Counter:
+            print(key, " ", type(key))
+        print(type((Arc((1, 0)), 21)))
+        self.Counter[(Arc((1, 0)), 21)]
+        # # while L is not empty
+        # while len(self.L) > 0:
+        #     # Remove an element from L
+        #     xj, dj = self.L[0]
+        #     self.L.pop(0)
+
+        #     for xi, di in self.S[(xj, dj)]:
+        #         arc = Arc((xi, xj))
+        #         self.Counter[(arc, di)] -= 1
+        #         logging.debug(
+        #             f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, xi)]}")
+        #         if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
+        #             self.M[(xi, di)] = 1
+        #             self.L.append((xi, di))
+        #             logging.debug(
+        #                 f"Propagate: deleting value x{xi}, {di}")
+
+        # # Prints out final domains
+        # print(M)
+
+    @ staticmethod
     def checkConstraint(i, xi, j, xj, constraint):
         return constraint(i, xi, j, xj)
 
@@ -104,4 +136,3 @@ constraints = {Arc((0, 1)): less_than,
                Arc((3, 1)): greater_than,
                Arc((3, 2)): less_than}
 ac4graph = AC4(domains, constraints)
-ac4graph.initialise()
