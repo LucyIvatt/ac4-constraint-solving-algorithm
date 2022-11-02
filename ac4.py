@@ -34,8 +34,6 @@ InputDomains = Dict[int, Set]
 
 
 class AC4:
-    def __init__(self, input_domains: InputDomains, constraints: ConstraintStore):
-        self.ac4(input_domains, constraints)
 
     def ac4(self, input_domains: InputDomains, constraints: ConstraintStore):
         """Performs initial setup of data structures and runs the AC4 algorithm by calling the initialise and
@@ -185,6 +183,8 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
     Returns:
         bool: if the assignments satisfy the constraint or not
     """
+    print(f"checking ({xi}, {di}) and ({xj} {dj})")
+    print((dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi))
     return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
 
 
@@ -207,27 +207,41 @@ def greater_than_constraint(xi, di, xj, dj) -> bool:
 # ----------------------------------------------------------------------------
 
 
-# def nqueens_test():
-#     domains = {n: set(range(6)) for n in range(6)}
-#     constraints = {
-#         Arc(n): nqueens for n in itertools.combinations(range(6), 2)}
-#     ac4 = AC4(domains, constraints)
+def lecture_example_test():
+    domains = {0: {2, 10, 16}, 1: {9, 12, 21},
+               2: {9, 10, 11}, 3: {2, 5, 10, 11}}
+
+    constraints = {Arc((0, 1)): less_than_constraint,
+                   Arc((0, 2)): less_than_constraint,
+                   Arc((0, 3)): less_than_constraint,
+                   Arc((1, 0)): greater_than_constraint,
+                   Arc((1, 2)): less_than_constraint,
+                   Arc((1, 3)): less_than_constraint,
+                   Arc((2, 0)): greater_than_constraint,
+                   Arc((2, 1)): greater_than_constraint,
+                   Arc((2, 3)): greater_than_constraint,
+                   Arc((3, 0)): greater_than_constraint,
+                   Arc((3, 1)): greater_than_constraint,
+                   Arc((3, 2)): less_than_constraint}
+    ac4graph = AC4(domains, constraints)
 
 
-# Testing with Lecture Example
-domains = {0: {2, 10, 16}, 1: {9, 12, 21},
-           2: {9, 10, 11}, 3: {2, 5, 10, 11}}
+def nqueens_ac4_test(assignments):
+    domains = {n: set(range(6)) for n in range(6)}
+    constraints = {
+        Arc(n): nqueens_constraint for n in itertools.combinations(range(6), 2)}
 
-constraints = {Arc((0, 1)): less_than_constraint,
-               Arc((0, 2)): less_than_constraint,
-               Arc((0, 3)): less_than_constraint,
-               Arc((1, 0)): greater_than_constraint,
-               Arc((1, 2)): less_than_constraint,
-               Arc((1, 3)): less_than_constraint,
-               Arc((2, 0)): greater_than_constraint,
-               Arc((2, 1)): greater_than_constraint,
-               Arc((2, 3)): greater_than_constraint,
-               Arc((3, 0)): greater_than_constraint,
-               Arc((3, 1)): greater_than_constraint,
-               Arc((3, 2)): less_than_constraint}
-ac4graph = AC4(domains, constraints)
+    for xi, di in assignments:
+        domains[xi] = set([di])
+
+    ac4 = AC4()
+    ac4.ac4(domains, constraints)
+
+
+# runs the three test cases as defined in the assessment brief
+test_assignments = [[(0, 0), (1, 2)],
+                    [(0, 0), (1, 3)],
+                    [(0, 1), (1, 3), (2, 5)]]
+
+for test in test_assignments:
+    nqueens_ac4_test(test)
