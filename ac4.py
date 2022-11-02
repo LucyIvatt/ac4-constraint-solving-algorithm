@@ -183,9 +183,8 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
     Returns:
         bool: if the assignments satisfy the constraint or not
     """
-    print(f"checking ({xi}, {di}) and ({xj} {dj})")
-    print((dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi))
-    return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
+    if (j > i):
+        return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
 
 
 def no_constraint(xi, di, xj, dj) -> bool:
@@ -223,25 +222,31 @@ def lecture_example_test():
                    Arc((3, 0)): greater_than_constraint,
                    Arc((3, 1)): greater_than_constraint,
                    Arc((3, 2)): less_than_constraint}
-    ac4graph = AC4(domains, constraints)
+    ac4graph = AC4()
+    ac4graph.ac4(domains, constraints)
 
 
 def nqueens_ac4_test(assignments):
     domains = {n: set(range(6)) for n in range(6)}
     constraints = {
-        Arc(n): nqueens_constraint for n in itertools.combinations(range(6), 2)}
+        Arc(n): nqueens_constraint for n in itertools.permutations(range(6), 2)}
+
+    print(constraints.keys())
 
     for xi, di in assignments:
         domains[xi] = set([di])
 
-    ac4 = AC4()
-    ac4.ac4(domains, constraints)
+    nqueenac4 = AC4()
+    nqueenac4.ac4(domains, constraints)
 
 
-# runs the three test cases as defined in the assessment brief
-test_assignments = [[(0, 0), (1, 2)],
-                    [(0, 0), (1, 3)],
-                    [(0, 1), (1, 3), (2, 5)]]
+# # runs the three test cases as defined in the assessment brief
+# test_assignments = [[(0, 0), (1, 2)],
+#                     [(0, 0), (1, 3)],
+#                     [(0, 1), (1, 3), (2, 5)]]
 
-for test in test_assignments:
-    nqueens_ac4_test(test)
+# for test in test_assignments:
+#     nqueens_ac4_test(test)
+
+x = [(0, 3), (1, 0), (2, 4), (3, 1), (4, 5)]
+nqueens_ac4_test(x)
