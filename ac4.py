@@ -1,37 +1,34 @@
 import itertools
 import logging
-from typing import Any, Callable, Dict, Set, Tuple
+from typing import Callable, Dict, Set, Any
+from collections import defaultdict
 
-logging.basicConfig(level=logging.DEBUG)
-
-
-class DecisionVar:
-    def __init__(self, id, val):
-        self.id = id
-        self.value = value
+logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+str_line = "-" * 30
 
 
 class Arc:
     def __init__(self, arc):
-        self.i, self.j = arc
+        self.xi, self.xj = arc
 
     def __str__(self):
-        return f"(x{self.i}, x{self.j})"
+        return f"(x{self.xi}, x{self.xj})"
 
     def __repr__(self):
-        return f"Arc(x{self.i}, x{self.j})"
+        return f"Arc(x{self.xi}, x{self.xj})"
 
     def __eq__(self, other):
         if not isinstance(other, Arc):
             return NotImplemented
-        return self.i == other.i and self.j == other.j
+        return self.xi == other.xi and self.xj == other.xj
 
     def __hash__(self):
-        return hash((self.i, self.j))
+        return hash((self.xi, self.xj))
 
 
 # Types for Constraint Functions, Constraint Store and Domains
-ConstraintFunction = Callable[[DecisionVar, DecisionVar], bool]
+# xi, di, xj, dj parameter for ConstraintFunction Callables
+ConstraintFunction = Callable[[int, Any, int, Any], bool]
 ConstraintStore = Dict[Arc, ConstraintFunction]
 InputDomains = Dict[int, Set]
 
@@ -45,20 +42,22 @@ class AC4:
         propagate methods.
 
         Args:
-            input_domains (InputDomains): A dictionary of ints (decision variable ids) to the set of their 
+            input_domains (InputDomains): A dictionary of ints (decision variable ids) to the set of their
             possible values (domains)
             constraints (ConstraintStore): A dictionary of arcs to their Callable constraint function
         """
+
+        logging.debug(str_line + "\nAC4: Beginning setup\n" + str_line)
         self.input_domains = input_domains
         self.constraints = constraints
 
         # Dictionary to store the number of supports for each domain element
         self.Counter = {(arc, di): 0 for arc in self.constraints.keys()
-                        for di in self.input_domains[arc.i]}
+                        for di in self.input_domains[arc.xi]}
 
         # Dictionary that maps all domain elements to the elements it provides support
-        self.S = {(xi, di): set() for di in self.input_domains.keys()
-                  for xi in self.input_domains[di]}
+        self.S = {(xi, di): set() for xi in self.input_domains.keys()
+                  for di in self.input_domains[xi]}
 
         # Table of deleted domain values - 1 if deleted otherwise 0
         self.M = {(xi, di): 0 for xi in self.input_domains.keys()
@@ -67,6 +66,12 @@ class AC4:
         # List to contain value deletions to propagate
         self.L = list()
 
+        logging.debug(
+            "AC4: Initialized data structures for domains, constraints, Counter, S, M and L")
+
+        logging.debug("AC4: Initial Domains = " +
+                      ''.join([f'\nAC4: x{xi}: {Di} ' for xi, Di in self.input_domains.items()]))
+
         # A dictionary to contain the final domain outputs of AC4
         self.final_domains = {xi: set() for xi in self.input_domains.keys()}
 
@@ -74,42 +79,45 @@ class AC4:
         self.propagate()
 
     def initialise(self):
-        """Processes all arcs once, enumerates support for each element of every domain and prunes 
+        """Processes all arcs once, enumerates support for each element of every domain and prunes
         domain elements with no supports. Stores any deletions in list L to propagate
         """
-        logging.debug("Initialise: Beginning initialization")
+        logging.debug(str_line+"\nInitialise: Beginning Phase\n"+str_line)
 
         # For each Arc (xi, xj) and all pairs of their domain values di ∈ Di and dj ∈ Dj (skipping any deleted values)
         # If the pairs satisfy the constraint, increment the support counter for di and add it to the set S for
         # xj, dj to show the dj provides support for this assignment.
 
         for arc, constraint in self.constraints.items():
-            for di in self.input_domains[arc.i]:
-                for dj in self.input_domains[arc.j]:
-                    if self.M[(arc.i, di)] != 1 or self.M[(arc.j, dj)] != 1:
-                        if self.checkConstraint(arc.i, di, arc.j, dj, constraint) == True:
-                            self.S[arc.j, dj].add((arc.i, di))
+            for di in self.input_domains[arc.xi]:
+                for dj in self.input_domains[arc.xj]:
+                    if self.M[(arc.xi, di)] != 1 or self.M[(arc.xj, dj)] != 1:
+                        if self.checkConstraint(arc.xi, di, arc.xj, dj, constraint) == True:
+                            self.S[arc.xj, dj].add((arc.xi, di))
                             self.Counter[(arc, di)] += 1
 
                             logging.debug(
-                                f"Initialise: set counter {arc}, {di} = {self.Counter[(arc, di)]}")
+                                f"Initialise: Incremented counter {arc}, {di} = {self.Counter[(arc, di)]}")
 
                 # If no support for di and it hasn't already been removed, update M to show deletion and add deletion
                 # to L to propagate later.
-                if self.Counter[(arc, di)] == 0 and self.M[(arc.i, di)] != 1:
-                    self.M[(arc.i, di)] = 1
-                    self.L.append((arc.i, di))
-                    logging.debug(f"Initialise: deleting x{arc.i}, {di}")
+                if self.Counter[(arc, di)] == 0 and self.M[(arc.xi, di)] != 1:
+                    self.M[(arc.xi, di)] = 1
+                    self.L.append((arc.xi, di))
+                    logging.debug(f"Initialise: deleting x{arc.xi}, {di}")
 
         logging.debug(
             f"Initialise: List of deletions to propagate - {''.join([f'(x{xi}, {di}) ' for xi, di in self.L])}")
 
+        logging.debug(
+            "Initialise: Phase complete\n")
+
     def propagate(self):
         """Propagates deleted values in L by - iterating over the assignments supported by the deleted value (S)
-         and decrementing their counters. If a counter reaches 0 and hasn't already been deleted then delete it 
+         and decrementing their counters. If a counter reaches 0 and hasn't already been deleted then delete it
          and add to L. Continues until L is empty.
         """
-
+        logging.debug(str_line + "\nPropagate: Beginning Phase\n" + str_line)
         while len(self.L) > 0:
             # Remove an element from L (arbitrarily decided to pick the first element but order is unimportant)
             xj, dj = self.L[0]
@@ -122,12 +130,12 @@ class AC4:
                 logging.debug(
                     f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, di)]}")
 
-                # If a value has no supports and isnt already deleted, delete it and add to L
+                # If a value has no supports and isn't already deleted, delete it and add to L
                 if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
                     self.M[(xi, di)] = 1
                     self.L.append((xi, di))
                     logging.debug(
-                        f"Propagate: deleting value x{xi}, {di}")
+                        f"Propagate: No supports found - deleting value x{xi}, {di}")
 
         # Once L is empty, checks final domains by accessing the switches stored in M
         for key, switch in self.M.items():
@@ -136,14 +144,31 @@ class AC4:
                 self.final_domains[xi].add(di)
 
         # Prints final domains
-        logging.info(f"Final Domains")
+        logging.info(f"Propagate: Final Domains")
         for key, value in self.final_domains.items():
-            logging.info(f"x{key}: {value}")
+            logging.info(f"Propagate: x{key}: {value}")
+
+        logging.debug(
+            "Propagate: Phase complete")
 
     @ staticmethod
-    def checkConstraint(i, xi, j, xj, constraint):
-        return constraint(i, xi, j, xj)
+    def checkConstraint(xi, di, xj, dj, constraint) -> bool:
+        """Calls the function from the constraint store on the 2 domain assignments for xi and dj.
 
+        Args:
+            xi (int): decision variable id 1
+            di (Any): domain assignment 1
+            xj (int): decision variable id 2
+            dj (Any): domain assignment 2
+            constraint (Callable): constraint function
+
+        Returns:
+            bool: if the constraint is satisfied or not
+        """
+        return constraint(xi, di, xj, dj)
+
+
+# ----------------------------------------------------------------------------
 
 # Constraint functions which are referenced in the ConstraintStore dictionary.
 # Must take in parameters in the form (xi, di, xj, dj) -> bool
@@ -153,9 +178,9 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
 
     Args:
         xi (int): decision variable id 1
-        di (int): domain value 1
+        di (Any): domain value 1
         xj (int): decision variable id 2
-        dj (int): domain value 2
+        dj (Any): domain value 2
 
     Returns:
         bool: if the assignments satisfy the constraint or not
@@ -179,6 +204,8 @@ def less_than_constraint(xi, di, xj, dj) -> bool:
 def greater_than_constraint(xi, di, xj, dj) -> bool:
     return di > dj
 
+# ----------------------------------------------------------------------------
+
 
 # def nqueens_test():
 #     domains = {n: set(range(6)) for n in range(6)}
@@ -186,19 +213,21 @@ def greater_than_constraint(xi, di, xj, dj) -> bool:
 #         Arc(n): nqueens for n in itertools.combinations(range(6), 2)}
 #     ac4 = AC4(domains, constraints)
 
-    # Testing with Lecture Example
+
+# Testing with Lecture Example
 domains = {0: {2, 10, 16}, 1: {9, 12, 21},
            2: {9, 10, 11}, 3: {2, 5, 10, 11}}
-constraints = {Arc((0, 1)): less_than,
-               Arc((0, 2)): less_than,
-               Arc((0, 3)): less_than,
-               Arc((1, 0)): greater_than,
-               Arc((1, 2)): less_than,
-               Arc((1, 3)): less_than,
-               Arc((2, 0)): greater_than,
-               Arc((2, 1)): greater_than,
-               Arc((2, 3)): greater_than,
-               Arc((3, 0)): greater_than,
-               Arc((3, 1)): greater_than,
-               Arc((3, 2)): less_than}
+
+constraints = {Arc((0, 1)): less_than_constraint,
+               Arc((0, 2)): less_than_constraint,
+               Arc((0, 3)): less_than_constraint,
+               Arc((1, 0)): greater_than_constraint,
+               Arc((1, 2)): less_than_constraint,
+               Arc((1, 3)): less_than_constraint,
+               Arc((2, 0)): greater_than_constraint,
+               Arc((2, 1)): greater_than_constraint,
+               Arc((2, 3)): greater_than_constraint,
+               Arc((3, 0)): greater_than_constraint,
+               Arc((3, 1)): greater_than_constraint,
+               Arc((3, 2)): less_than_constraint}
 ac4graph = AC4(domains, constraints)
