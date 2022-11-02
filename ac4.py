@@ -74,7 +74,15 @@ class AC4:
         self.propagate()
 
     def initialise(self):
+        """Processes all arcs once, enumerates support for each element of every domain and prunes 
+        domain elements with no supports. Stores any deletions in list L to propagate
+        """
         logging.debug("Initialise: Beginning initialization")
+
+        # For each Arc (xi, xj) and all pairs of their domain values di ∈ Di and dj ∈ Dj (skipping any deleted values)
+        # If the pairs satisfy the constraint, increment the support counter for di and add it to the set S for
+        # xj, dj to show the dj provides support for this assignment.
+
         for arc, constraint in self.constraints.items():
             for di in self.input_domains[arc.i]:
                 for dj in self.input_domains[arc.j]:
@@ -82,36 +90,46 @@ class AC4:
                         if self.checkConstraint(arc.i, di, arc.j, dj, constraint) == True:
                             self.S[arc.j, dj].add((arc.i, di))
                             self.Counter[(arc, di)] += 1
+
                             logging.debug(
                                 f"Initialise: set counter {arc}, {di} = {self.Counter[(arc, di)]}")
 
+                # If no support for di and it hasn't already been removed, update M to show deletion and add deletion
+                # to L to propagate later.
                 if self.Counter[(arc, di)] == 0 and self.M[(arc.i, di)] != 1:
                     self.M[(arc.i, di)] = 1
                     self.L.append((arc.i, di))
                     logging.debug(f"Initialise: deleting x{arc.i}, {di}")
 
         logging.debug(
-            f"Initialise: List of deletions to propagate - {''.join([f'(x{d[0]}, {d[1]}) ' for d in self.L])}")
+            f"Initialise: List of deletions to propagate - {''.join([f'(x{xi}, {di}) ' for xi, di in self.L])}")
 
     def propagate(self):
-        # while L is not empty
+        """Propagates deleted values in L by - iterating over the assignments supported by the deleted value (S)
+         and decrementing their counters. If a counter reaches 0 and hasn't already been deleted then delete it 
+         and add to L. Continues until L is empty.
+        """
+
         while len(self.L) > 0:
-            # Remove an element from L
+            # Remove an element from L (arbitrarily decided to pick the first element but order is unimportant)
             xj, dj = self.L[0]
             self.L.pop(0)
 
+            # Decrements the counters of assignments support by the deleted value
             for xi, di in self.S[(xj, dj)]:
                 arc = Arc((xi, xj))
                 self.Counter[(arc, di)] -= 1
                 logging.debug(
                     f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, di)]}")
+
+                # If a value has no supports and isnt already deleted, delete it and add to L
                 if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
                     self.M[(xi, di)] = 1
                     self.L.append((xi, di))
                     logging.debug(
                         f"Propagate: deleting value x{xi}, {di}")
 
-        # Checks final domains by accessing the switches stored in M
+        # Once L is empty, checks final domains by accessing the switches stored in M
         for key, switch in self.M.items():
             xi, di = key
             if switch == 0:
@@ -127,24 +145,48 @@ class AC4:
         return constraint(i, xi, j, xj)
 
 
-def nqueens(i, xi, j, xj):
-    return (xj != xi) and (xj != xi + j - i) and (xj != xi - j - i)
+# Constraint functions which are referenced in the ConstraintStore dictionary.
+# Must take in parameters in the form (xi, di, xj, dj) -> bool
+
+def nqueens_constraint(xi, di, xj, dj) -> bool:
+    """nqueens constraint which ensures the two queens are not in the same row, column or diagonal.
+
+    Args:
+        xi (int): decision variable id 1
+        di (int): domain value 1
+        xj (int): decision variable id 2
+        dj (int): domain value 2
+
+    Returns:
+        bool: if the assignments satisfy the constraint or not
+    """
+    return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
 
 
-def less_than(i, xi, j, xj):
-    return xi < xj
+def no_constraint(xi, di, xj, dj) -> bool:
+    """Always returns true for an arc as there is no constraint between them
+
+    Returns:
+        bool: True
+    """
+    return True
 
 
-def greater_than(i, xi, j, xj):
-    return xi > xj
+def less_than_constraint(xi, di, xj, dj) -> bool:
+    return di < dj
 
 
-# Testing with NQueens Problem
-# domains = {n: set(range(6)) for n in range(6)}
-# constraints = {Arc(n): nqueens for n in itertools.combinations(range(6), 2)}
-# ac4 = AC4(domains, constraints)
+def greater_than_constraint(xi, di, xj, dj) -> bool:
+    return di > dj
 
-# Testing with Lecture Example
+
+# def nqueens_test():
+#     domains = {n: set(range(6)) for n in range(6)}
+#     constraints = {
+#         Arc(n): nqueens for n in itertools.combinations(range(6), 2)}
+#     ac4 = AC4(domains, constraints)
+
+    # Testing with Lecture Example
 domains = {0: {2, 10, 16}, 1: {9, 12, 21},
            2: {9, 10, 11}, 3: {2, 5, 10, 11}}
 constraints = {Arc((0, 1)): less_than,
