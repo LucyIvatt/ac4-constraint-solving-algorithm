@@ -30,7 +30,7 @@ class Arc:
         return hash((self.i, self.j))
 
 
-# Type hints for the Arcs, Constraint Functions and Constraint Store
+# Types for Constraint Functions, Constraint Store and Domains
 ConstraintFunction = Callable[[DecisionVar, DecisionVar], bool]
 ConstraintStore = Dict[Arc, ConstraintFunction]
 InputDomains = Dict[int, Set]
@@ -38,19 +38,37 @@ InputDomains = Dict[int, Set]
 
 class AC4:
     def __init__(self, input_domains: InputDomains, constraints: ConstraintStore):
+        self.ac4(input_domains, constraints)
+
+    def ac4(self, input_domains: InputDomains, constraints: ConstraintStore):
+        """Performs initial setup of data structures and runs the AC4 algorithm by calling the initialise and
+        propagate methods.
+
+        Args:
+            input_domains (InputDomains): A dictionary of ints (decision variable ids) to the set of their 
+            possible values (domains)
+            constraints (ConstraintStore): A dictionary of arcs to their Callable constraint function
+        """
         self.input_domains = input_domains
         self.constraints = constraints
 
-        self.Counter = {(arc, val): 0 for arc in self.constraints.keys()
-                        for val in self.input_domains[arc.i]}
+        # Dictionary to store the number of supports for each domain element
+        self.Counter = {(arc, di): 0 for arc in self.constraints.keys()
+                        for di in self.input_domains[arc.i]}
 
-        self.S = {(var, val): set() for var in self.input_domains.keys()
-                  for val in self.input_domains[var]}
-        self.M = {(var, val): 0 for var in self.input_domains.keys()
-                  for val in self.input_domains[var]}
+        # Dictionary that maps all domain elements to the elements it provides support
+        self.S = {(xi, di): set() for di in self.input_domains.keys()
+                  for xi in self.input_domains[di]}
+
+        # Table of deleted domain values - 1 if deleted otherwise 0
+        self.M = {(xi, di): 0 for xi in self.input_domains.keys()
+                  for di in self.input_domains[xi]}
+
+        # List to contain value deletions to propagate
         self.L = list()
 
-        self.final_domains = {var: set() for var in self.input_domains.keys()}
+        # A dictionary to contain the final domain outputs of AC4
+        self.final_domains = {xi: set() for xi in self.input_domains.keys()}
 
         self.initialise()
         self.propagate()
