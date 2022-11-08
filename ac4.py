@@ -89,13 +89,19 @@ class AC4:
         for arc, constraint in self.constraints.items():
             for di in self.input_domains[arc.xi]:
                 for dj in self.input_domains[arc.xj]:
+                    if arc.xi == 4:
+                        print(f"checking against {arc.xj} = {dj}")
                     if self.M[(arc.xi, di)] != 1 or self.M[(arc.xj, dj)] != 1:
+                        print(arc.xi, di, arc.xj, dj)
                         if self.checkConstraint(arc.xi, di, arc.xj, dj, constraint) == True:
+                            print("passed constraint")
                             self.S[arc.xj, dj].add((arc.xi, di))
                             self.Counter[(arc, di)] += 1
 
                             logging.debug(
                                 f"Initialise: Incremented counter {arc}, {di} = {self.Counter[(arc, di)]}")
+                        else:
+                            print("didnt")
 
                 # If no support for di and it hasn't already been removed, update M to show deletion and add deletion
                 # to L to propagate later.
@@ -183,8 +189,10 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
     Returns:
         bool: if the assignments satisfy the constraint or not
     """
-    if (j > i):
-        return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
+    if xi > xj:
+        di, xi, dj, xj = dj, xj, di, xi
+
+    return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
 
 
 def no_constraint(xi, di, xj, dj) -> bool:
@@ -235,6 +243,8 @@ def nqueens_ac4_test(assignments):
 
     for xi, di in assignments:
         domains[xi] = set([di])
+
+    print(domains)
 
     nqueenac4 = AC4()
     nqueenac4.ac4(domains, constraints)
