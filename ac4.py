@@ -1,9 +1,8 @@
 import itertools
 import logging
 from typing import Callable, Dict, Set, Any
-from collections import defaultdict
 
-logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 str_line = "-" * 30
 
 
@@ -34,7 +33,6 @@ InputDomains = Dict[int, Set]
 
 
 class AC4:
-
     def ac4(self, input_domains: InputDomains, constraints: ConstraintStore):
         """Performs initial setup of data structures and runs the AC4 algorithm by calling the initialise and
         propagate methods.
@@ -71,7 +69,7 @@ class AC4:
                       ''.join([f'\nAC4: x{xi}: {Di} ' for xi, Di in self.input_domains.items()]))
 
         # A dictionary to contain the final domain outputs of AC4
-        self.final_domains = {xi: set() for xi in self.input_domains.keys()}
+        self.current_domains = {xi: set() for xi in self.input_domains.keys()}
 
         self.initialise()
         self.propagate()
@@ -89,19 +87,13 @@ class AC4:
         for arc, constraint in self.constraints.items():
             for di in self.input_domains[arc.xi]:
                 for dj in self.input_domains[arc.xj]:
-                    if arc.xi == 4:
-                        print(f"checking against {arc.xj} = {dj}")
                     if self.M[(arc.xi, di)] != 1 or self.M[(arc.xj, dj)] != 1:
-                        print(arc.xi, di, arc.xj, dj)
                         if self.checkConstraint(arc.xi, di, arc.xj, dj, constraint) == True:
-                            print("passed constraint")
                             self.S[arc.xj, dj].add((arc.xi, di))
                             self.Counter[(arc, di)] += 1
 
                             logging.debug(
                                 f"Initialise: Incremented counter {arc}, {di} = {self.Counter[(arc, di)]}")
-                        else:
-                            print("didnt")
 
                 # If no support for di and it hasn't already been removed, update M to show deletion and add deletion
                 # to L to propagate later.
@@ -109,6 +101,13 @@ class AC4:
                     self.M[(arc.xi, di)] = 1
                     self.L.append((arc.xi, di))
                     logging.debug(f"Initialise: deleting x{arc.xi}, {di}")
+
+                    self.current_domains = {xi: set()
+                                            for xi in self.input_domains.keys()}
+                    for key, switch in self.M.items():
+                        xi, di = key
+                        if switch == 0:
+                            self.current_domains[xi].add(di)
 
         logging.debug(
             f"Initialise: List of deletions to propagate - {''.join([f'(x{xi}, {di}) ' for xi, di in self.L])}")
@@ -132,7 +131,7 @@ class AC4:
                 arc = Arc((xi, xj))
                 self.Counter[(arc, di)] -= 1
                 logging.debug(
-                    f"Propagate: updated counter {arc}, {xi} = {self.Counter[(arc, di)]}")
+                    f"Propagate: updated counter {arc}, {di} = {self.Counter[(arc, di)]}")
 
                 # If a value has no supports and isn't already deleted, delete it and add to L
                 if self.Counter[(arc, di)] == 0 and self.M[(xi, di)] != 1:
@@ -141,15 +140,16 @@ class AC4:
                     logging.debug(
                         f"Propagate: No supports found - deleting value x{xi}, {di}")
 
-        # Once L is empty, checks final domains by accessing the switches stored in M
-        for key, switch in self.M.items():
-            xi, di = key
-            if switch == 0:
-                self.final_domains[xi].add(di)
+                    self.current_domains = {xi: set()
+                                            for xi in self.input_domains.keys()}
+                    for key, switch in self.M.items():
+                        xi, di = key
+                        if switch == 0:
+                            self.current_domains[xi].add(di)
 
         # Prints final domains
         logging.info(f"Propagate: Final Domains")
-        for key, value in self.final_domains.items():
+        for key, value in self.current_domains.items():
             logging.info(f"Propagate: x{key}: {value}")
 
         logging.debug(
@@ -192,7 +192,7 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
     if xi > xj:
         di, xi, dj, xj = dj, xj, di, xi
 
-    return (dj != di) and (dj != di + xj - xi) and (dj != di - xj - xi)
+    return dj != di and dj != (di + xj - xi) and dj != (di - xj + xi)
 
 
 def no_constraint(xi, di, xj, dj) -> bool:
@@ -214,49 +214,93 @@ def greater_than_constraint(xi, di, xj, dj) -> bool:
 # ----------------------------------------------------------------------------
 
 
-def lecture_example_test():
-    domains = {0: {2, 10, 16}, 1: {9, 12, 21},
-               2: {9, 10, 11}, 3: {2, 5, 10, 11}}
+# def lecture_example_test():
+#     domains = {0: {2, 10, 16}, 1: {9, 12, 21},
+#                2: {9, 10, 11}, 3: {2, 5, 10, 11}}
 
-    constraints = {Arc((0, 1)): less_than_constraint,
-                   Arc((0, 2)): less_than_constraint,
-                   Arc((0, 3)): less_than_constraint,
-                   Arc((1, 0)): greater_than_constraint,
-                   Arc((1, 2)): less_than_constraint,
-                   Arc((1, 3)): less_than_constraint,
-                   Arc((2, 0)): greater_than_constraint,
-                   Arc((2, 1)): greater_than_constraint,
-                   Arc((2, 3)): greater_than_constraint,
-                   Arc((3, 0)): greater_than_constraint,
-                   Arc((3, 1)): greater_than_constraint,
-                   Arc((3, 2)): less_than_constraint}
-    ac4graph = AC4()
-    ac4graph.ac4(domains, constraints)
+#     constraints = {Arc((0, 1)): less_than_constraint,
+#                    Arc((0, 2)): less_than_constraint,
+#                    Arc((0, 3)): less_than_constraint,
+#                    Arc((1, 0)): greater_than_constraint,
+#                    Arc((1, 2)): less_than_constraint,
+#                    Arc((1, 3)): less_than_constraint,
+#                    Arc((2, 0)): greater_than_constraint,
+#                    Arc((2, 1)): greater_than_constraint,
+#                    Arc((2, 3)): greater_than_constraint,
+#                    Arc((3, 0)): greater_than_constraint,
+#                    Arc((3, 1)): greater_than_constraint,
+#                    Arc((3, 2)): less_than_constraint}
+#     ac4graph = AC4()
+#     ac4graph.ac4(domains, constraints)
 
+
+NUM_QUEENS = 6
 
 def nqueens_ac4_test(assignments):
-    domains = {n: set(range(6)) for n in range(6)}
+    domains = {n: set(range(NUM_QUEENS)) for n in range(NUM_QUEENS)}
     constraints = {
-        Arc(n): nqueens_constraint for n in itertools.permutations(range(6), 2)}
-
-    print(constraints.keys())
+        Arc(n): nqueens_constraint for n in itertools.permutations(range(NUM_QUEENS), 2)}
 
     for xi, di in assignments:
         domains[xi] = set([di])
 
-    print(domains)
-
     nqueenac4 = AC4()
     nqueenac4.ac4(domains, constraints)
 
+def ac3():
+    Q = [n for n in itertools.permutations(range(NUM_QUEENS), 2)]
 
-# # runs the three test cases as defined in the assessment brief
-# test_assignments = [[(0, 0), (1, 2)],
-#                     [(0, 0), (1, 3)],
-#                     [(0, 1), (1, 3), (2, 5)]]
+    while len(Q) != 0:
+        i, j = Q.pop(0)
+        changed = reviseAC3(i, ac3_domains[i], j, ac3_domains[j])
+        if changed:
+            Q.extend([(x, y) for x, y in itertools.permutations(range(NUM_QUEENS), 2) if x == i or x == j])
 
-# for test in test_assignments:
-#     nqueens_ac4_test(test)
 
-x = [(0, 3), (1, 0), (2, 4), (3, 1), (4, 5)]
-nqueens_ac4_test(x)
+def reviseAC3(i, Di, j, Dj):
+    change = False
+    to_remove = []
+    for di in Di:
+        supported = False
+        for dj in Dj:
+            if i == 4:
+                print(f"Checking value x{i}={di} and d{j}={dj}")
+            if nqueens_constraint(i, di, j, dj):
+                supported = True
+                if i == 4:
+                    print("Supports this")
+            else:
+                if i == 4:
+                    print("doesnt support this")
+        if supported == False:
+            print(f"{di} from x{i}")
+            to_remove.append(di)
+            change = True
+        else:
+            print("------")
+        
+    
+    for i in to_remove:
+        Di.remove(i)
+    if len(ac3_domains[i]) == 0:
+        print ("empty domain failure")
+    return change
+
+test_assignments = [(0, 1), (1, 3), (2, 5)]
+
+
+ac3_domains = {n: set(range(NUM_QUEENS)) for n in range(NUM_QUEENS)}
+ac3_constraints = {Arc(n): nqueens_constraint for n in itertools.permutations(range(NUM_QUEENS), 2)}
+
+for x in ac3_constraints.keys():
+    print(x)
+
+for i, di in test_assignments:
+    ac3_domains[i] = set([di])
+ac3()
+for key, val in ac3_domains.items():
+    print(key, val)
+
+# runs the three test cases as defined in the assessment brief
+
+nqueens_ac4_test(test_assignments)
