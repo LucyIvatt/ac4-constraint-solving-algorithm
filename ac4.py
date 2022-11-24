@@ -1,12 +1,16 @@
 import itertools
 import logging
-from typing import Callable, Dict, Set, Any, Tuple
+from typing import Callable, Dict, Set, Any
 
-logging.basicConfig(level=logging.INFO, format='%(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(message)s', filename="ac4.log", filemode='w')
 str_line = "-" * 30
 
 
 class Arc:
+    """Class to hold pairs of decision variable ids (arcs) to assign constraints to.
+    """
+
     def __init__(self, arc):
         self.xi, self.xj = arc
 
@@ -26,11 +30,13 @@ class Arc:
 
 
 class DomainWipeout(Exception):
+    """Used during AC4 propagation to raise an error if any domains are emptied. 
+    """
     pass
 
 
-# Types for Constraint Functions, Constraint Store and Domains
-# xi, di, xj, dj parameter for ConstraintFunction Callables
+# Type hints for Constraint Functions, Constraint Store and Domains
+# (int, Any, int, Any) = (xi, di, xj, dj) parameters for constraint functions
 ConstraintFunction = Callable[[int, Any, int, Any], bool]
 ConstraintStore = Dict[Arc, ConstraintFunction]
 InputDomains = Dict[int, Set]
@@ -67,14 +73,13 @@ class AC4:
         # List to contain value deletions to propagate
         self.L = list()
 
-        logging.debug(
-            "AC4: Initialized data structures for domains, constraints, Counter, S, M and L")
-
-        logging.debug("AC4: Initial Domains = " +
-                      ''.join([f'\nAC4: x{xi}: {Di} ' for xi, Di in self.input_domains.items()]))
-
         # A dictionary to contain the final domain outputs of AC4
         self.current_domains = {xi: set() for xi in self.input_domains.keys()}
+
+        logging.debug(
+            "AC4: Initialized data structures for domains, constraints, Counter, S, M and L")
+        logging.debug("AC4: Initial Domains = " +
+                      ''.join([f'\nAC4: x{xi}: {Di} ' for xi, Di in self.input_domains.items()]))
 
         self.initialise()
         self.propagate()
@@ -87,59 +92,49 @@ class AC4:
 
         # For each Arc (xi, xj) and all pairs of their domain values di ∈ Di and dj ∈ Dj (skipping any deleted values)
         # If the pairs satisfy the constraint, increment the support counter for di and add it to the set S for
-        # xj, dj to show the dj provides support for this assignment.
+    # xj, dj to show the dj provides support for this assignment.
+        for arc, constraint in self.constraints.items():
+            for di in self.input_domains[arc.xi]:
+                for dj in self.input_domains[arc.xj]:
+                    if self.M[(arc.xi, di)] != 1 or self.M[(arc.xj, dj)] != 1:
+                        if self.checkConstraint(arc.xi, di, arc.xj, dj, constraint) == True:
+                            self.S[arc.xj, dj].add((arc.xi, di))
+                            self.Counter[(arc, di)] += 1
 
-        try:
-            for arc, constraint in self.constraints.items():
-                for di in self.input_domains[arc.xi]:
-                    for dj in self.input_domains[arc.xj]:
-                        if self.M[(arc.xi, di)] != 1 or self.M[(arc.xj, dj)] != 1:
-                            if self.checkConstraint(arc.xi, di, arc.xj, dj, constraint) == True:
-                                self.S[arc.xj, dj].add((arc.xi, di))
-                                self.Counter[(arc, di)] += 1
+                            logging.debug(
+                                f"Initialise: Incremented counter {arc}, {di} = {self.Counter[(arc, di)]}")
 
-                                logging.debug(
-                                    f"Initialise: Incremented counter {arc}, {di} = {self.Counter[(arc, di)]}")
+                # If no support for di and it hasn't already been removed, update M to show deletion and add
+                # deletion to L to propagate later.
+                if self.Counter[(arc, di)] == 0 and self.M[(arc.xi, di)] != 1:
+                    self.M[(arc.xi, di)] = 1
+                    self.L.append((arc.xi, di))
+                    logging.debug(f"Initialise: deleting x{arc.xi}, {di}")
 
-                    # If no support for di and it hasn't already been removed, update M to show deletion and add deletion
-                    # to L to propagate later.
-                    if self.Counter[(arc, di)] == 0 and self.M[(arc.xi, di)] != 1:
-                        self.M[(arc.xi, di)] = 1
-                        self.L.append((arc.xi, di))
-                        logging.debug(f"Initialise: deleting x{arc.xi}, {di}")
-
-                        # Updates the current_domains dictionary when a value is deleted, by reading the switches in M
-                        self.current_domains = {xi: set()
-                                                for xi in self.input_domains.keys()}
-                        for key, switch in self.M.items():
-                            xi, di = key
-                            if switch == 0:
-                                self.current_domains[xi].add(di)
-                        for xi, Di in self.current_domains.items():
-                            if len(Di) == 0:
-                                raise DomainWipeout
-        except DomainWipeout:
-            logging.info(
-                f"Initialise: Domain wipeout detected, stopping AC4 algorithm")
-
+                    # Updates the current_domains dictionary when a value is deleted by reading the switches in M
+                    self.current_domains = {xi: set()
+                                            for xi in self.input_domains.keys()}
+                    for key, switch in self.M.items():
+                        xi, di = key
+                        if switch == 0:
+                            self.current_domains[xi].add(di)
         logging.debug(
             f"Initialise: List of deletions to propagate - {''.join([f'(x{xi}, {di}) ' for xi, di in self.L])}")
-
         logging.debug(
             "Initialise: Phase complete\n")
 
     def propagate(self):
-        """Propagates deleted values in L by - iterating over the assignments supported by the deleted value (S)
+        """Propagates deleted values in L by iterating over the assignments supported by the deleted value (S)
          and decrementing their counters. If a counter reaches 0 and hasn't already been deleted then delete it
          and add to L. Continues until L is empty.
         """
         try:
             logging.debug(
                 str_line + "\nPropagate: Beginning Phase\n" + str_line)
+
             while len(self.L) > 0:
                 # Remove an element from L (arbitrarily decided to pick the first element but order is unimportant)
-                xj, dj = self.L[0]
-                self.L.pop(0)
+                xj, dj = self.L.pop(0)
 
                 # Decrements the counters of assignments support by the deleted value
                 for xi, di in self.S[(xj, dj)]:
@@ -155,14 +150,15 @@ class AC4:
                         logging.debug(
                             f"Propagate: No supports found - deleting value x{xi}, {di}")
 
+                        # Updates current domains when M is updated
                         self.current_domains = {xi: set()
                                                 for xi in self.input_domains.keys()}
-
                         for key, switch in self.M.items():
                             xi, di = key
                             if switch == 0:
                                 self.current_domains[xi].add(di)
 
+                        # If any of the domains are empty, raises a DomainWipeout error which stops the algorithm
                         for xi, Di in self.current_domains.items():
                             if len(Di) == 0:
                                 raise DomainWipeout
@@ -180,7 +176,7 @@ class AC4:
 
     @ staticmethod
     def checkConstraint(xi, di, xj, dj, constraint) -> bool:
-        """Calls the function from the constraint store on the 2 domain assignments for xi and dj.
+        """Calls the function from the constraint store on the 2 domain assignments for xi and xj.
 
         Args:
             xi (int): decision variable id 1
@@ -197,8 +193,8 @@ class AC4:
 
 # ----------------------------------------------------------------------------
 
-# Constraint functions which are referenced in the ConstraintStore dictionary.
-# Must take in parameters in the form (xi, di, xj, dj) -> bool
+# Constraint functions which are referenced in the ConstraintStore dictionary
+# must take in parameters in the form (xi, di, xj, dj) -> bool
 
 def nqueens_constraint(xi, di, xj, dj) -> bool:
     """nqueens constraint which ensures the two queens are not in the same row, column or diagonal.
@@ -217,15 +213,6 @@ def nqueens_constraint(xi, di, xj, dj) -> bool:
 
     return dj != di and dj != (di + xj - xi) and dj != (di - xj + xi)
 
-
-def no_constraint(xi, di, xj, dj) -> bool:
-    """Always returns true for an arc as there is no constraint between them
-
-    Returns:
-        bool: True
-    """
-    return True
-
 # ----------------------------------------------------------------------------
 
 
@@ -243,7 +230,7 @@ def nqueens_ac4_test(num_queens, test_case):
     constraints = {Arc(n): nqueens_constraint for n in itertools.permutations(
         range(num_queens), 2)}
 
-    # Restricts decision variables from the test case to be only the assigned value
+    # Restricts decision variables in the test case to be only the assigned value
     for xi, di in test_case:
         domains[xi] = set([di])
 
