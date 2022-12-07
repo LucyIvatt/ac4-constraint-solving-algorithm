@@ -92,7 +92,7 @@ class AC4:
 
         # For each Arc (xi, xj) and all pairs of their domain values di ∈ Di and dj ∈ Dj (skipping any deleted values)
         # If the pairs satisfy the constraint, increment the support counter for di and add it to the set S for
-    # xj, dj to show the dj provides support for this assignment.
+        # xj, dj to show the dj provides support for this assignment.
         for arc, constraint in self.constraints.items():
             for di in self.input_domains[arc.xi]:
                 for dj in self.input_domains[arc.xj]:
